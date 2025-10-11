@@ -75,6 +75,14 @@
       >
         Generate Schedule
       </button>
+
+      <button
+        @click="regenerateSchedule()"
+        x-show="isGenerated"
+        class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-200"
+      >
+        Regenerate Schedule
+      </button>
     </section>
 
     <!-- Error display section -->
@@ -200,6 +208,30 @@
 
           // Set generated flag
           this.isGenerated = true;
+        },
+
+        regenerateSchedule() {
+          // Validate current inputs (coach may have changed them)
+          if (!this.validateInputs()) {
+            return;
+          }
+
+          // Reset student opportunity counters
+          this.students.forEach(student => {
+            student.driverCount = 0;
+            student.loaderCount = 0;
+          });
+
+          // Clear previous schedule
+          this.rounds = [];
+
+          // Run algorithm (leverages existing Math.random() for variation)
+          this.runGreedyFillAlgorithm();
+
+          // Validate final schedule
+          this.validateFinalSchedule();
+
+          // Keep isGenerated = true (schedule remains visible)
         },
 
         runGreedyFillAlgorithm() {
