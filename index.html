@@ -66,11 +66,62 @@
       </div>
     </section>
 
-    <!-- Action buttons section (future story) -->
+    <!-- Action buttons section -->
+    <section class="mb-8 text-center">
+      <button
+        @click="generateSchedule()"
+        x-show="!isGenerated"
+        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-200"
+      >
+        Generate Schedule
+      </button>
+    </section>
 
-    <!-- Error display section (future story) -->
+    <!-- Error display section -->
+    <section class="mb-8" x-show="errorMessage">
+      <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
+        <p x-text="errorMessage"></p>
+      </div>
+    </section>
 
-    <!-- Schedule display section (future story) -->
+    <!-- Empty state -->
+    <section class="mb-8" x-show="!isGenerated && !errorMessage">
+      <div class="text-center text-gray-500 py-12">
+        <p class="text-lg">Enter student names and click Generate</p>
+      </div>
+    </section>
+
+    <!-- Schedule display section -->
+    <section x-show="isGenerated">
+      <div class="bg-white rounded-lg shadow-md overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full border-collapse">
+            <thead>
+              <tr class="bg-blue-600 text-white">
+                <th class="px-4 py-3 text-left font-bold border border-gray-300 print:border-black print:text-black">Round</th>
+                <th class="px-4 py-3 text-left font-bold border border-gray-300 print:border-black print:text-black">Team</th>
+                <th class="px-4 py-3 text-left font-bold border border-gray-300 print:border-black print:text-black">Driver 1</th>
+                <th class="px-4 py-3 text-left font-bold border border-gray-300 print:border-black print:text-black">Driver 2</th>
+                <th class="px-4 py-3 text-left font-bold border border-gray-300 print:border-black print:text-black">Loader</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="round in rounds" :key="round.roundNumber">
+                <template x-for="team in round.teams" :key="team.teamNumber">
+                  <tr class="even:bg-gray-100">
+                    <td class="px-4 py-3 border border-gray-300 text-gray-900 print:text-lg print:border-black print:text-black" x-text="round.roundNumber"></td>
+                    <td class="px-4 py-3 border border-gray-300 text-gray-900 print:text-lg print:border-black print:text-black" x-text="team.teamNumber"></td>
+                    <td class="px-4 py-3 border border-gray-300 text-gray-900 print:text-lg print:border-black print:text-black" x-text="team.driver1"></td>
+                    <td class="px-4 py-3 border border-gray-300 text-gray-900 print:text-lg print:border-black print:text-black" x-text="team.driver2"></td>
+                    <td class="px-4 py-3 border border-gray-300 text-gray-900 print:text-lg print:border-black print:text-black" x-text="team.loader"></td>
+                  </tr>
+                </template>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </div>
 
   <script>
