@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Algorithm Test - VexIQ Team Pairing</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen p-8">
+  <div x-data="testApp()" class="max-w-6xl mx-auto">
+    <h1 class="text-3xl font-bold mb-6">Algorithm Tests</h1>
+
+    <button @click="runAllTests()" class="bg-blue-500 text-white px-6 py-2 rounded mb-4">
+      Run All Tests
+    </button>
+
+    <div x-show="testResults.length > 0" class="bg-white rounded-lg shadow p-6">
+      <h2 class="text-xl font-bold mb-4">Test Results</h2>
+      <template x-for="result in testResults" :key="result.name">
+        <div class="mb-4 p-4 border rounded" :class="result.passed ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'">
+          <div class="font-bold" x-text="result.name"></div>
+          <div x-text="result.passed ? '✓ PASSED' : '✗ FAILED'" :class="result.passed ? 'text-green-700' : 'text-red-700'"></div>
+          <div class="text-sm mt-2" x-text="result.message"></div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <script>
+    // Import the scheduleApp logic
+    function scheduleApp() {
+      return {
+        studentNames: '',
+        numRounds: 5,
+        numTeams: 2,
+        students: [],
+        rounds: [],
+        errorMessage: '',
+        isGenerated: false,
+
+        parseStudents() {
+          const names = this.studentNames
+            .split('\n')
+            .map(name => name.trim())
+            .filter(name => name.length > 0);
+
+          return names.map((name, index) => ({
+            id: index,
+            name: name,
+            driverCount: 0,
+            loaderCount: 0
+          }));
+        },
+
+        validateInputs() {
+          const names = this.studentNames
+            .split('\n')
+            .map(name => name.trim())
+            .filter(name => name.length > 0);
+
+          if (names.length === 0 || names.length < 3) {
+            this.errorMessage = 'Please enter at least 3 student names';
+            return false;
+          }
+
+          if (this.numRounds < 1) {
+            this.errorMessage = 'Number of rounds must be at least 1';
+            return false;
+          }
+
+          if (this.numTeams !== 1 && this.numTeams !== 2) {
+            this.errorMessage = 'Number of teams must be 1 or 2';
+            return false;
+          }
+
+          this.errorMessage = '';
+          return true;
+        },
+
+        generateSchedule() {
+          if (!this.validateInputs()) {
+            return;
+          }
+
+          this.students = this.parseStudents();
+          this.rounds = [];
+          this.runGreedyFillAlgorithm();
+          this.validateFinalSchedule();
+          this.isGenerated = true;
+        },
+
+        calculateVariance(role) {
+          const countKey = role === 'driver' ? 'driverCount' : 'loaderCount';
+          const counts = this.students.map(s => s[countKey]);
+          const maxCount = Math.max(...counts);
+          const minCount = Math.min(...counts);
+          return maxCount - minCount;
+        },
+
+        wouldViolateVariance(student, role) {
+          const countKey = role === 'driver' ? 'driverCount' : 'loaderCount';
+          const simulatedCount = student[countKey] + 1;
+          const currentMaxCount = Math.max(...this.students.map(s => s[countKey]));
+          const maxCount = Math.max(currentMaxCount, simulatedCount);
+          const minCount = Math.min(...this.students.map(s => s[countKey]));
+          const simulatedVariance = maxCount - minCount;
+          return simulatedVariance > 1;
+        },
+
+        validateFinalSchedule() {
+          const driverVariance = this.calculateVariance('driver');
+          const loaderVariance = this.calculateVariance('loader');
+          const valid = driverVariance <= 1 && loaderVariance <= 1;
+
+          if (!valid) {
+            console.warn(`Final variance exceeds target: driver=${driverVariance}, loader=${loaderVariance}`);
+            this.students.forEach(student => {
+              console.warn(`Student ${student.name}: driverCount=${student.driverCount}, loaderCount=${student.loaderCount}`);
+            });
+          }
+
+          return {
+            driverVariance: driverVariance,
+            loaderVariance: loaderVariance,
+            valid: valid
+          };
+        },
+
+        runGreedyFillAlgorithm() {
+          for (let r = 1; r <= this.numRounds; r++) {
+            const round = {
+              roundNumber: r,
+              teams: []
+            };
+
+            const assignedThisRound = new Set();
+
+            for (let t = 1; t <= this.numTeams; t++) {
+              const team = {
+                teamNumber: t,
+                driver1: '',
+                driver2: '',
+                loader: ''
+              };
+
+              const driver1 = this.selectStudentForRole('driver', assignedThisRound);
+              team.driver1 = driver1.name;
+              driver1.driverCount++;
+              assignedThisRound.add(driver1.id);
+
+              const driver2 = this.selectStudentForRole('driver', assignedThisRound);
+              team.driver2 = driver2.name;
+              driver2.driverCount++;
+              assignedThisRound.add(driver2.id);
+
+              const loader = this.selectStudentForRole('loader', assignedThisRound);
+              team.loader = loader.name;
+              loader.loaderCount++;
+              assignedThisRound.add(loader.id);
+
+              round.teams.push(team);
+            }
+
+            this.rounds.push(round);
+          }
+        },
+
+        selectStudentForRole(role, assignedThisRound) {
+          const countKey = role === 'driver' ? 'driverCount' : 'loaderCount';
+          let available = this.students.filter(s => !assignedThisRound.has(s.id));
+
+          if (available.length === 0) {
+            console.warn('No available students - reusing students in same round');
+            available = this.students; // Consider all students for reuse
+          }
+
+          const minCount = Math.min(...available.map(s => s[countKey]));
+          const candidates = available.filter(s => s[countKey] === minCount);
+
+          // Filter candidates to those that don't violate variance constraint
+          const varianceCompliant = candidates.filter(s => !this.wouldViolateVariance(s, role));
+
+          // If no variance-compliant candidates, log warning and use all candidates
+          if (varianceCompliant.length === 0) {
+            console.warn(`Perfect balance impossible for ${role} - using best-effort selection`);
+            const randomIndex = Math.floor(Math.random() * candidates.length);
+            return candidates[randomIndex];
+          }
+
+          // Randomly select from variance-compliant candidates
+          const randomIndex = Math.floor(Math.random() * varianceCompliant.length);
+          return varianceCompliant[randomIndex];
+        }
+      };
+    }
+
+    function testApp() {
+      return {
+        testResults: [],
+
+        runAllTests() {
+          this.testResults = [];
+
+          this.testParseStudents();
+          this.testValidation();
+          this.testTypicalTournament();
+          this.testRoleTracking();
+          this.testNoDuplicates();
+          this.testEdgeCases();
+          this.testVarianceEdgeCase5x20();
+          this.testVarianceEdgeCase25x5();
+          this.testVarianceEdgeCase8x10();
+          this.testPerformance();
+        },
+
+        testParseStudents() {
+          const app = scheduleApp();
+          app.studentNames = 'Alice\nBob\nCharlie\n\nDiana  \n  Evan  ';
+          const students = app.parseStudents();
+
+          const passed = students.length === 5 &&
+                        students[0].name === 'Alice' &&
+                        students[0].driverCount === 0 &&
+                        students[0].loaderCount === 0 &&
+                        students[0].id === 0;
+
+          this.testResults.push({
+            name: 'Parse Students',
+            passed: passed,
+            message: passed ? `Parsed ${students.length} students correctly` : 'Failed to parse students correctly'
+          });
+        },
+
+        testValidation() {
+          const app = scheduleApp();
+
+          // Test empty names
+          app.studentNames = '';
+          let result1 = !app.validateInputs() && app.errorMessage === 'Please enter at least 3 student names';
+
+          // Test < 3 students
+          app.studentNames = 'Alice\nBob';
+          let result2 = !app.validateInputs() && app.errorMessage === 'Please enter at least 3 student names';
+
+          // Test invalid rounds
+          app.studentNames = 'Alice\nBob\nCharlie';
+          app.numRounds = 0;
+          let result3 = !app.validateInputs() && app.errorMessage === 'Number of rounds must be at least 1';
+
+          // Test invalid teams
+          app.numRounds = 5;
+          app.numTeams = 3;
+          let result4 = !app.validateInputs() && app.errorMessage === 'Number of teams must be 1 or 2';
+
+          const passed = result1 && result2 && result3 && result4;
+
+          this.testResults.push({
+            name: 'Input Validation',
+            passed: passed,
+            message: passed ? 'All validation checks passed' : 'Some validation checks failed'
+          });
+        },
+
+        testTypicalTournament() {
+          const app = scheduleApp();
+          app.studentNames = Array.from({length: 30}, (_, i) => `Student${i+1}`).join('\n');
+          app.numRounds = 15;
+          app.numTeams = 2;
+
+          app.generateSchedule();
+
+          const passed = app.isGenerated &&
+                        app.rounds.length === 15 &&
+                        app.rounds[0].teams.length === 2 &&
+                        app.rounds[0].teams[0].driver1 !== '';
+
+          this.testResults.push({
+            name: 'Typical Tournament (30 students, 15 rounds)',
+            passed: passed,
+            message: passed ? `Generated ${app.rounds.length} rounds successfully` : 'Failed to generate schedule'
+          });
+        },
+
+        testRoleTracking() {
+          const app = scheduleApp();
+          app.studentNames = 'Alice\nBob\nCharlie\nDiana\nEvan';
+          app.numRounds = 3;
+          app.numTeams = 2;
+
+          app.generateSchedule();
+
+          // Calculate expected totals
+          const expectedDriverSlots = 3 * 2 * 2; // 3 rounds * 2 teams * 2 drivers
+          const expectedLoaderSlots = 3 * 2 * 1; // 3 rounds * 2 teams * 1 loader
+
+          const totalDriverCount = app.students.reduce((sum, s) => sum + s.driverCount, 0);
+          const totalLoaderCount = app.students.reduce((sum, s) => sum + s.loaderCount, 0);
+
+          const passed = totalDriverCount === expectedDriverSlots &&
+                        totalLoaderCount === expectedLoaderSlots &&
+                        app.students.every(s => typeof s.driverCount === 'number' && typeof s.loaderCount === 'number');
+
+          this.testResults.push({
+            name: 'Independent Role Tracking',
+            passed: passed,
+            message: passed ?
+              `Driver slots: ${totalDriverCount}/${expectedDriverSlots}, Loader slots: ${totalLoaderCount}/${expectedLoaderSlots}` :
+              'Role tracking failed'
+          });
+        },
+
+        testNoDuplicates() {
+          const app = scheduleApp();
+          app.studentNames = 'Alice\nBob\nCharlie\nDiana\nEvan\nFrank';
+          app.numRounds = 5;
+          app.numTeams = 2;
+
+          app.generateSchedule();
+
+          let duplicateFound = false;
+          for (const round of app.rounds) {
+            const namesInRound = [];
+            for (const team of round.teams) {
+              namesInRound.push(team.driver1, team.driver2, team.loader);
+            }
+
+            const uniqueNames = new Set(namesInRound);
+            if (uniqueNames.size !== namesInRound.length) {
+              duplicateFound = true;
+              break;
+            }
+          }
+
+          const passed = !duplicateFound;
+
+          this.testResults.push({
+            name: 'No Duplicate Students per Round',
+            passed: passed,
+            message: passed ? 'No student appears twice in same round' : 'Found duplicate student in same round'
+          });
+        },
+
+        testEdgeCases() {
+          const app = scheduleApp();
+          app.studentNames = 'Alice\nBob\nCharlie'; // Minimum 3 students
+          app.numRounds = 5;
+          app.numTeams = 2;
+
+          app.generateSchedule();
+
+          const passed = app.isGenerated && app.rounds.length === 5;
+
+          this.testResults.push({
+            name: 'Edge Case: 3 Students, 5 Rounds',
+            passed: passed,
+            message: passed ? 'Algorithm handled minimum students scenario' : 'Failed with minimum students'
+          });
+        },
+
+        testVarianceEdgeCase5x20() {
+          const app = scheduleApp();
+          app.studentNames = 'Alice\nBob\nCharlie\nDiana\nEvan\nFrank';
+          app.numRounds = 20;
+          app.numTeams = 2;
+
+          app.generateSchedule();
+
+          const driverVariance = app.calculateVariance('driver');
+          const loaderVariance = app.calculateVariance('loader');
+
+          // Expected: 20 × 2 × 2 = 80 driver slots / 6 students = 13.33 each (variance should be ≤ 1)
+          // Expected: 20 × 2 × 1 = 40 loader slots / 6 students = 6.67 each (variance should be ≤ 1)
+          const passed = app.isGenerated && driverVariance <= 1 && loaderVariance <= 1;
+
+          this.testResults.push({
+            name: 'Variance Edge Case: 6 students × 20 rounds',
+            passed: passed,
+            message: `Driver variance: ${driverVariance}, Loader variance: ${loaderVariance} (both should be ≤ 1)`
+          });
+        },
+
+        testVarianceEdgeCase25x5() {
+          const app = scheduleApp();
+          app.studentNames = Array.from({length: 25}, (_, i) => `Student${i+1}`).join('\n');
+          app.numRounds = 5;
+          app.numTeams = 2;
+
+          app.generateSchedule();
+
+          const driverVariance = app.calculateVariance('driver');
+          const loaderVariance = app.calculateVariance('loader');
+
+          // Expected: 5 × 2 × 2 = 20 driver slots / 25 students (many get 0-1)
+          // Expected: 5 × 2 × 1 = 10 loader slots / 25 students (many get 0-1)
+          const passed = app.isGenerated && driverVariance <= 1 && loaderVariance <= 1;
+
+          this.testResults.push({
+            name: 'Variance Edge Case: 25 students × 5 rounds',
+            passed: passed,
+            message: `Driver variance: ${driverVariance}, Loader variance: ${loaderVariance} (both should be ≤ 1)`
+          });
+        },
+
+        testVarianceEdgeCase8x10() {
+          const app = scheduleApp();
+          app.studentNames = Array.from({length: 8}, (_, i) => `Student${i+1}`).join('\n');
+          app.numRounds = 10;
+          app.numTeams = 2;
+
+          app.generateSchedule();
+
+          const driverVariance = app.calculateVariance('driver');
+          const loaderVariance = app.calculateVariance('loader');
+
+          // Verify no student appears on both teams in same round
+          let duplicateFound = false;
+          for (const round of app.rounds) {
+            const namesInRound = [];
+            for (const team of round.teams) {
+              namesInRound.push(team.driver1, team.driver2, team.loader);
+            }
+            const uniqueNames = new Set(namesInRound);
+            if (uniqueNames.size !== namesInRound.length) {
+              duplicateFound = true;
+              break;
+            }
+          }
+
+          // Expected: 10 × 2 × 2 = 40 driver slots / 8 students = 5 each (variance 0 or 1)
+          // Expected: 10 × 2 × 1 = 20 loader slots / 8 students = 2.5 each (variance 1)
+          const passed = app.isGenerated && driverVariance <= 1 && loaderVariance <= 1 && !duplicateFound;
+
+          this.testResults.push({
+            name: 'Variance Edge Case: 8 students × 10 rounds',
+            passed: passed,
+            message: `Driver variance: ${driverVariance}, Loader variance: ${loaderVariance}, No duplicates: ${!duplicateFound}`
+          });
+        },
+
+        testPerformance() {
+          const app = scheduleApp();
+          app.studentNames = Array.from({length: 30}, (_, i) => `Student${i+1}`).join('\n');
+          app.numRounds = 15;
+          app.numTeams = 2;
+
+          const startTime = performance.now();
+          app.generateSchedule();
+          const endTime = performance.now();
+          const duration = endTime - startTime;
+
+          const passed = duration < 1000; // < 1 second
+
+          this.testResults.push({
+            name: 'Performance (< 1 second)',
+            passed: passed,
+            message: `Execution time: ${duration.toFixed(2)}ms`
+          });
+        }
+      };
+    }
+  </script>
+</body>
+</html>
