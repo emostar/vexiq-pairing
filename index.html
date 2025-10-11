@@ -114,7 +114,7 @@
               </tr>
             </thead>
             <tbody>
-              <template x-for="round in rounds" :key="round.roundNumber">
+              <template x-for="round in sortedRounds" :key="round.roundNumber">
                 <template x-for="team in round.teams" :key="team.teamNumber">
                   <tr class="even:bg-gray-100">
                     <td class="px-4 py-3 border border-gray-300 text-gray-900 print:text-lg print:border-black print:text-black" x-text="round.roundNumber"></td>
@@ -143,6 +143,11 @@
         rounds: [],
         errorMessage: '',
         isGenerated: false,
+
+        // Computed property for sorted rounds
+        get sortedRounds() {
+          return [...this.rounds].sort((a, b) => b.roundNumber - a.roundNumber);
+        },
 
         // Methods
         parseStudents() {
