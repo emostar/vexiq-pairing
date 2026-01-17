@@ -96,6 +96,9 @@
           <label class="block text-sm font-medium text-gray-700 mb-2">
             Remove Student (e.g., if leaving early)
           </label>
+          <p class="text-xs text-gray-600 mb-3">
+            Tip: Lock completed rounds first to preserve their participation history, then remove the student. Unlocked rounds will be regenerated fairly.
+          </p>
           <div class="flex gap-2 items-center">
             <select
               x-model="studentToRemove"
@@ -348,7 +351,17 @@
             return;
           }
 
-          // Check if student appears in any locked rounds
+          // Check if student appears in any unlocked rounds
+          const appearsInUnlockedRound = this.rounds.some(round => {
+            if (round.locked) return false;
+            return round.teams.some(team =>
+              team.driver1 === studentToRemove.name ||
+              team.driver2 === studentToRemove.name ||
+              team.loader === studentToRemove.name
+            );
+          });
+
+          // Check if student appears in locked rounds
           const appearsInLockedRound = this.rounds.some(round => {
             if (!round.locked) return false;
             return round.teams.some(team =>
@@ -358,8 +371,19 @@
             );
           });
 
-          if (appearsInLockedRound) {
-            this.errorMessage = `Cannot remove ${studentToRemove.name} - they appear in locked rounds. Please unlock those rounds first.`;
+          // Build confirmation message
+          let confirmMessage = `Remove ${studentToRemove.name} from the tournament?`;
+          if (appearsInLockedRound && appearsInUnlockedRound) {
+            confirmMessage += `\n\nThey participated in locked rounds (which will be preserved) and will be removed from unlocked rounds.`;
+          } else if (appearsInLockedRound) {
+            confirmMessage += `\n\nThey participated in locked rounds, which will be preserved as a historical record.`;
+          } else if (appearsInUnlockedRound) {
+            confirmMessage += `\n\nThey appear in unlocked rounds, which will be regenerated without them.`;
+          }
+          confirmMessage += `\n\nUnlocked rounds will be regenerated to balance opportunities fairly.`;
+
+          // Confirm removal
+          if (!confirm(confirmMessage)) {
             return;
           }
 
