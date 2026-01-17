@@ -77,19 +77,34 @@
       </button>
 
       <div x-show="isGenerated" class="space-y-4">
-        <button
-          @click="regenerateSchedule()"
-          class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-200"
-        >
-          Regenerate Schedule
-        </button>
+        <div class="flex gap-4 justify-center flex-wrap">
+          <button
+            @click="regenerateSchedule()"
+            class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-200"
+          >
+            Regenerate Schedule
+          </button>
 
-        <button
-          @click="clearSchedule()"
-          class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-200"
-        >
-          Clear & Start Fresh
-        </button>
+          <button
+            @click="copyShareUrl()"
+            class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-200 relative"
+          >
+            <span x-show="!shareUrlCopied">Copy Share Link</span>
+            <span x-show="shareUrlCopied" class="flex items-center gap-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+              Copied!
+            </span>
+          </button>
+
+          <button
+            @click="clearSchedule()"
+            class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-200"
+          >
+            Clear & Start Fresh
+          </button>
+        </div>
 
         <!-- Remove student section -->
         <div class="bg-yellow-50 border border-yellow-300 rounded-lg p-4 inline-block">
@@ -184,10 +199,17 @@
         errorMessage: '',
         isGenerated: false,
         studentToRemove: '',
+        shareUrlCopied: false,
 
         // Initialization
         init() {
-          this.loadFromLocalStorage();
+          // First try to load from URL (highest priority)
+          const loadedFromUrl = this.loadFromUrl();
+
+          // If no URL state, fall back to localStorage
+          if (!loadedFromUrl) {
+            this.loadFromLocalStorage();
+          }
         },
 
         // Computed property for sorted rounds
@@ -207,6 +229,9 @@
           };
           localStorage.setItem('vexiq-pairing-state', JSON.stringify(state));
           console.log('State saved to localStorage');
+
+          // Also update URL for sharing
+          this.updateUrlWithState();
         },
 
         loadFromLocalStorage() {
@@ -230,6 +255,71 @@
         clearLocalStorage() {
           localStorage.removeItem('vexiq-pairing-state');
           console.log('State cleared from localStorage');
+        },
+
+        // URL Sharing Methods
+        encodeStateToUrl() {
+          const state = {
+            studentNames: this.studentNames,
+            numRounds: this.numRounds,
+            numTeams: this.numTeams,
+            students: this.students,
+            rounds: this.rounds,
+            isGenerated: this.isGenerated
+          };
+          const jsonString = JSON.stringify(state);
+          const base64 = btoa(jsonString);
+          return base64;
+        },
+
+        updateUrlWithState() {
+          const encodedState = this.encodeStateToUrl();
+          const url = new URL(window.location.href);
+          url.searchParams.set('state', encodedState);
+          window.history.replaceState({}, '', url.toString());
+          console.log('URL updated with state');
+        },
+
+        loadFromUrl() {
+          const urlParams = new URLSearchParams(window.location.search);
+          const encodedState = urlParams.get('state');
+
+          if (!encodedState) {
+            return false;
+          }
+
+          try {
+            const jsonString = atob(encodedState);
+            const state = JSON.parse(jsonString);
+
+            this.studentNames = state.studentNames || '';
+            this.numRounds = state.numRounds || 5;
+            this.numTeams = state.numTeams || 2;
+            this.students = state.students || [];
+            this.rounds = state.rounds || [];
+            this.isGenerated = state.isGenerated || false;
+
+            console.log('State loaded from URL');
+            return true;
+          } catch (e) {
+            console.error('Failed to load state from URL:', e);
+            return false;
+          }
+        },
+
+        async copyShareUrl() {
+          const url = window.location.href;
+          try {
+            await navigator.clipboard.writeText(url);
+            this.shareUrlCopied = true;
+            setTimeout(() => {
+              this.shareUrlCopied = false;
+            }, 2000);
+            console.log('Share URL copied to clipboard');
+          } catch (e) {
+            console.error('Failed to copy URL:', e);
+            alert('Failed to copy URL. Please copy it manually from the address bar.');
+          }
         },
 
         // Methods
@@ -417,6 +507,11 @@
 
             // Clear localStorage
             this.clearLocalStorage();
+
+            // Clear URL parameter
+            const url = new URL(window.location.href);
+            url.searchParams.delete('state');
+            window.history.replaceState({}, '', url.toString());
           }
         },
 
