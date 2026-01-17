@@ -185,6 +185,7 @@
                           <option
                             :value="student.name"
                             x-text="student.name"
+                            :selected="team.driver1 === student.name"
                             :disabled="isStudentUsedInRound(round, student.name, team.teamNumber, 'driver1')"
                             :class="isStudentUsedInRound(round, student.name, team.teamNumber, 'driver1') ? 'text-gray-400' : ''"
                           ></option>
@@ -202,6 +203,7 @@
                           <option
                             :value="student.name"
                             x-text="student.name"
+                            :selected="team.driver2 === student.name"
                             :disabled="isStudentUsedInRound(round, student.name, team.teamNumber, 'driver2')"
                             :class="isStudentUsedInRound(round, student.name, team.teamNumber, 'driver2') ? 'text-gray-400' : ''"
                           ></option>
