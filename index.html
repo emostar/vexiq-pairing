@@ -174,8 +174,42 @@
                     </td>
                     <td class="px-4 py-3 border border-gray-300 text-gray-900 print:text-lg print:border-black print:text-black" x-text="round.roundNumber"></td>
                     <td class="px-4 py-3 border border-gray-300 text-gray-900 print:text-lg print:border-black print:text-black" x-text="team.teamNumber"></td>
-                    <td class="px-4 py-3 border border-gray-300 text-gray-900 print:text-lg print:border-black print:text-black" x-text="team.driver1"></td>
-                    <td class="px-4 py-3 border border-gray-300 text-gray-900 print:text-lg print:border-black print:text-black" x-text="team.driver2"></td>
+                    <td class="px-4 py-3 border border-gray-300 text-gray-900 print:text-lg print:border-black print:text-black">
+                      <span class="hidden print:inline" x-text="team.driver1"></span>
+                      <select
+                        x-model="team.driver1"
+                        @change="onDriverChange(round, team, 'driver1', $event.target.value)"
+                        class="print:hidden w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white"
+                      >
+                        <template x-for="student in students" :key="student.id">
+                          <option
+                            :value="student.name"
+                            x-text="student.name"
+                            :selected="team.driver1 === student.name"
+                            :disabled="isStudentUsedInRound(round, student.name, team.teamNumber, 'driver1')"
+                            :class="isStudentUsedInRound(round, student.name, team.teamNumber, 'driver1') ? 'text-gray-400' : ''"
+                          ></option>
+                        </template>
+                      </select>
+                    </td>
+                    <td class="px-4 py-3 border border-gray-300 text-gray-900 print:text-lg print:border-black print:text-black">
+                      <span class="hidden print:inline" x-text="team.driver2"></span>
+                      <select
+                        x-model="team.driver2"
+                        @change="onDriverChange(round, team, 'driver2', $event.target.value)"
+                        class="print:hidden w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white"
+                      >
+                        <template x-for="student in students" :key="student.id">
+                          <option
+                            :value="student.name"
+                            x-text="student.name"
+                            :selected="team.driver2 === student.name"
+                            :disabled="isStudentUsedInRound(round, student.name, team.teamNumber, 'driver2')"
+                            :class="isStudentUsedInRound(round, student.name, team.teamNumber, 'driver2') ? 'text-gray-400' : ''"
+                          ></option>
+                        </template>
+                      </select>
+                    </td>
                     <td class="px-4 py-3 border border-gray-300 text-gray-900 print:text-lg print:border-black print:text-black" x-text="team.loader"></td>
                   </tr>
                 </template>
@@ -739,6 +773,67 @@
           // Randomly select from variance-compliant candidates
           const randomIndex = Math.floor(Math.random() * varianceCompliant.length);
           return varianceCompliant[randomIndex];
+        },
+
+        // Check if a student is already used in a round (for dropdown validation)
+        isStudentUsedInRound(round, studentName, currentTeamNumber, currentRole) {
+          // Check all teams in this round
+          for (const team of round.teams) {
+            // Skip checking the current position being edited
+            if (team.teamNumber === currentTeamNumber) {
+              // Check other positions in the same team
+              if (currentRole !== 'driver1' && team.driver1 === studentName) return true;
+              if (currentRole !== 'driver2' && team.driver2 === studentName) return true;
+              if (currentRole !== 'loader' && team.loader === studentName) return true;
+            } else {
+              // Check all positions in other teams
+              if (team.driver1 === studentName) return true;
+              if (team.driver2 === studentName) return true;
+              if (team.loader === studentName) return true;
+            }
+          }
+          return false;
+        },
+
+        // Handle driver change from dropdown
+        onDriverChange(round, team, role, newValue) {
+          // The x-model already updates the value, so we just need to:
+          // 1. Recalculate student counts
+          // 2. Save to localStorage
+
+          // Recalculate all student counts from the current schedule
+          this.recalculateStudentCounts();
+
+          // Save to localStorage
+          this.saveToLocalStorage();
+
+          console.log(`Changed ${role} in round ${round.roundNumber}, team ${team.teamNumber} to ${newValue}`);
+        },
+
+        // Recalculate all student counts from the current schedule
+        recalculateStudentCounts() {
+          // Reset all counts to 0
+          this.students.forEach(student => {
+            student.driverCount = 0;
+            student.loaderCount = 0;
+          });
+
+          // Count from all rounds
+          this.rounds.forEach(round => {
+            round.teams.forEach(team => {
+              // Count driver1
+              const driver1 = this.students.find(s => s.name === team.driver1);
+              if (driver1) driver1.driverCount++;
+
+              // Count driver2
+              const driver2 = this.students.find(s => s.name === team.driver2);
+              if (driver2) driver2.driverCount++;
+
+              // Count loader
+              const loader = this.students.find(s => s.name === team.loader);
+              if (loader) loader.loaderCount++;
+            });
+          });
         }
       };
     }
