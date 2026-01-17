@@ -8,7 +8,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body class="bg-gray-50 min-h-screen p-8">
-  <div x-data="scheduleApp()" class="max-w-4xl mx-auto">
+  <div x-data="scheduleApp()" x-init="init()" class="max-w-4xl mx-auto">
     <!-- Header section -->
     <header class="mb-8">
       <h1 class="text-4xl font-bold text-gray-900 text-center">VexIQ Team Pairing Tool</h1>
@@ -67,7 +67,7 @@
     </section>
 
     <!-- Action buttons section -->
-    <section class="mb-8 text-center">
+    <section class="mb-8 text-center space-y-4">
       <button
         @click="generateSchedule()"
         x-show="!isGenerated"
@@ -76,13 +76,64 @@
         Generate Schedule
       </button>
 
-      <button
-        @click="regenerateSchedule()"
-        x-show="isGenerated"
-        class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-200"
-      >
-        Regenerate Schedule
-      </button>
+      <div x-show="isGenerated" class="space-y-4">
+        <div class="flex gap-4 justify-center flex-wrap">
+          <button
+            @click="regenerateSchedule()"
+            class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-200"
+          >
+            Regenerate Schedule
+          </button>
+
+          <button
+            @click="copyShareUrl()"
+            class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-200 relative"
+          >
+            <span x-show="!shareUrlCopied">Copy Share Link</span>
+            <span x-show="shareUrlCopied" class="flex items-center gap-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+              Copied!
+            </span>
+          </button>
+
+          <button
+            @click="clearSchedule()"
+            class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-200"
+          >
+            Clear & Start Fresh
+          </button>
+        </div>
+
+        <!-- Remove student section -->
+        <div class="bg-yellow-50 border border-yellow-300 rounded-lg p-4 inline-block">
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            Remove Student (e.g., if leaving early)
+          </label>
+          <p class="text-xs text-gray-600 mb-3">
+            Tip: Lock completed rounds first to preserve their participation history, then remove the student. Unlocked rounds will be regenerated fairly.
+          </p>
+          <div class="flex gap-2 items-center">
+            <select
+              x-model="studentToRemove"
+              class="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-yellow-500 focus:border-yellow-500"
+            >
+              <option value="">-- Select Student --</option>
+              <template x-for="student in students" :key="student.id">
+                <option :value="student.id" x-text="student.name"></option>
+              </template>
+            </select>
+            <button
+              @click="removeStudent()"
+              :disabled="!studentToRemove"
+              class="bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-200"
+            >
+              Remove & Regenerate
+            </button>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- Error display section -->
@@ -106,6 +157,7 @@
           <table class="w-full border-collapse">
             <thead>
               <tr class="bg-blue-600 text-white">
+                <th class="px-4 py-3 text-left font-bold border border-gray-300 print:border-black print:text-black print:hidden">Lock</th>
                 <th class="px-4 py-3 text-left font-bold border border-gray-300 print:border-black print:text-black">Round</th>
                 <th class="px-4 py-3 text-left font-bold border border-gray-300 print:border-black print:text-black">Team</th>
                 <th class="px-4 py-3 text-left font-bold border border-gray-300 print:border-black print:text-black">Driver 1</th>
@@ -115,8 +167,11 @@
             </thead>
             <tbody>
               <template x-for="round in sortedRounds" :key="round.roundNumber">
-                <template x-for="team in round.teams" :key="team.teamNumber">
+                <template x-for="(team, teamIndex) in round.teams" :key="team.teamNumber">
                   <tr class="even:bg-gray-100">
+                    <td class="px-4 py-3 border border-gray-300 text-center print:hidden" :rowspan="round.teams.length" x-show="teamIndex === 0">
+                      <input type="checkbox" x-model="round.locked" @change="saveToLocalStorage()" class="w-4 h-4 cursor-pointer">
+                    </td>
                     <td class="px-4 py-3 border border-gray-300 text-gray-900 print:text-lg print:border-black print:text-black" x-text="round.roundNumber"></td>
                     <td class="px-4 py-3 border border-gray-300 text-gray-900 print:text-lg print:border-black print:text-black" x-text="team.teamNumber"></td>
                     <td class="px-4 py-3 border border-gray-300 text-gray-900 print:text-lg print:border-black print:text-black" x-text="team.driver1"></td>
@@ -137,16 +192,134 @@
       return {
         // Data properties
         studentNames: '',
-        numRounds: 5,
-        numTeams: 2,
+        numRounds: 7,
+        numTeams: 1,
         students: [],
         rounds: [],
         errorMessage: '',
         isGenerated: false,
+        studentToRemove: '',
+        shareUrlCopied: false,
+
+        // Initialization
+        init() {
+          // First try to load from URL (highest priority)
+          const loadedFromUrl = this.loadFromUrl();
+
+          // If no URL state, fall back to localStorage
+          if (!loadedFromUrl) {
+            this.loadFromLocalStorage();
+          }
+        },
 
         // Computed property for sorted rounds
         get sortedRounds() {
-          return [...this.rounds].sort((a, b) => b.roundNumber - a.roundNumber);
+          return [...this.rounds].sort((a, b) => a.roundNumber - b.roundNumber);
+        },
+
+        // Local Storage Methods
+        saveToLocalStorage() {
+          const state = {
+            studentNames: this.studentNames,
+            numRounds: this.numRounds,
+            numTeams: this.numTeams,
+            students: this.students,
+            rounds: this.rounds,
+            isGenerated: this.isGenerated
+          };
+          localStorage.setItem('vexiq-pairing-state', JSON.stringify(state));
+          console.log('State saved to localStorage');
+
+          // Also update URL for sharing
+          this.updateUrlWithState();
+        },
+
+        loadFromLocalStorage() {
+          const savedState = localStorage.getItem('vexiq-pairing-state');
+          if (savedState) {
+            try {
+              const state = JSON.parse(savedState);
+              this.studentNames = state.studentNames || '';
+              this.numRounds = state.numRounds || 5;
+              this.numTeams = state.numTeams || 2;
+              this.students = state.students || [];
+              this.rounds = state.rounds || [];
+              this.isGenerated = state.isGenerated || false;
+              console.log('State loaded from localStorage');
+            } catch (e) {
+              console.error('Failed to load state from localStorage:', e);
+            }
+          }
+        },
+
+        clearLocalStorage() {
+          localStorage.removeItem('vexiq-pairing-state');
+          console.log('State cleared from localStorage');
+        },
+
+        // URL Sharing Methods
+        encodeStateToUrl() {
+          const state = {
+            studentNames: this.studentNames,
+            numRounds: this.numRounds,
+            numTeams: this.numTeams,
+            students: this.students,
+            rounds: this.rounds,
+            isGenerated: this.isGenerated
+          };
+          const jsonString = JSON.stringify(state);
+          const base64 = btoa(jsonString);
+          return base64;
+        },
+
+        updateUrlWithState() {
+          const encodedState = this.encodeStateToUrl();
+          const url = new URL(window.location.href);
+          url.searchParams.set('state', encodedState);
+          window.history.replaceState({}, '', url.toString());
+          console.log('URL updated with state');
+        },
+
+        loadFromUrl() {
+          const urlParams = new URLSearchParams(window.location.search);
+          const encodedState = urlParams.get('state');
+
+          if (!encodedState) {
+            return false;
+          }
+
+          try {
+            const jsonString = atob(encodedState);
+            const state = JSON.parse(jsonString);
+
+            this.studentNames = state.studentNames || '';
+            this.numRounds = state.numRounds || 5;
+            this.numTeams = state.numTeams || 2;
+            this.students = state.students || [];
+            this.rounds = state.rounds || [];
+            this.isGenerated = state.isGenerated || false;
+
+            console.log('State loaded from URL');
+            return true;
+          } catch (e) {
+            console.error('Failed to load state from URL:', e);
+            return false;
+          }
+        },
+
+        async copyShareUrl() {
+          const url = window.location.href;
+          try {
+            await navigator.clipboard.writeText(url);
+            this.shareUrlCopied = true;
+            setTimeout(() => {
+              this.shareUrlCopied = false;
+            }, 2000);
+            console.log('Share URL copied to clipboard');
+          } catch (e) {
+            console.error('Failed to copy URL:', e);
+            alert('Failed to copy URL. Please copy it manually from the address bar.');
+          }
         },
 
         // Methods
@@ -213,6 +386,9 @@
 
           // Set generated flag
           this.isGenerated = true;
+
+          // Save to localStorage
+          this.saveToLocalStorage();
         },
 
         regenerateSchedule() {
@@ -221,22 +397,205 @@
             return;
           }
 
-          // Reset student opportunity counters
+          // Check if we have locked rounds
+          const hasLockedRounds = this.rounds.some(r => r.locked);
+
+          if (hasLockedRounds) {
+            // Preserve locked rounds and regenerate only unlocked ones
+            this.regenerateWithLockedRounds();
+          } else {
+            // Full regeneration (original behavior)
+            // Reset student opportunity counters
+            this.students.forEach(student => {
+              student.driverCount = 0;
+              student.loaderCount = 0;
+            });
+
+            // Clear previous schedule
+            this.rounds = [];
+
+            // Run algorithm (leverages existing Math.random() for variation)
+            this.runGreedyFillAlgorithm();
+
+            // Validate final schedule
+            this.validateFinalSchedule();
+          }
+
+          // Keep isGenerated = true (schedule remains visible)
+
+          // Save to localStorage
+          this.saveToLocalStorage();
+        },
+
+        removeStudent() {
+          if (!this.studentToRemove) {
+            return;
+          }
+
+          // Find the student to remove
+          const studentId = parseInt(this.studentToRemove);
+          const studentToRemove = this.students.find(s => s.id === studentId);
+
+          if (!studentToRemove) {
+            this.errorMessage = 'Student not found';
+            return;
+          }
+
+          // Check if student appears in any unlocked rounds
+          const appearsInUnlockedRound = this.rounds.some(round => {
+            if (round.locked) return false;
+            return round.teams.some(team =>
+              team.driver1 === studentToRemove.name ||
+              team.driver2 === studentToRemove.name ||
+              team.loader === studentToRemove.name
+            );
+          });
+
+          // Check if student appears in locked rounds
+          const appearsInLockedRound = this.rounds.some(round => {
+            if (!round.locked) return false;
+            return round.teams.some(team =>
+              team.driver1 === studentToRemove.name ||
+              team.driver2 === studentToRemove.name ||
+              team.loader === studentToRemove.name
+            );
+          });
+
+          // Build confirmation message
+          let confirmMessage = `Remove ${studentToRemove.name} from the tournament?`;
+          if (appearsInLockedRound && appearsInUnlockedRound) {
+            confirmMessage += `\n\nThey participated in locked rounds (which will be preserved) and will be removed from unlocked rounds.`;
+          } else if (appearsInLockedRound) {
+            confirmMessage += `\n\nThey participated in locked rounds, which will be preserved as a historical record.`;
+          } else if (appearsInUnlockedRound) {
+            confirmMessage += `\n\nThey appear in unlocked rounds, which will be regenerated without them.`;
+          }
+          confirmMessage += `\n\nUnlocked rounds will be regenerated to balance opportunities fairly.`;
+
+          // Confirm removal
+          if (!confirm(confirmMessage)) {
+            return;
+          }
+
+          // Remove the student from the students array
+          this.students = this.students.filter(s => s.id !== studentId);
+
+          // Clear the selection
+          this.studentToRemove = '';
+
+          // Clear error message
+          this.errorMessage = '';
+
+          // Regenerate the schedule with locked rounds preserved
+          this.regenerateWithLockedRounds();
+
+          // Save to localStorage
+          this.saveToLocalStorage();
+        },
+
+        clearSchedule() {
+          if (confirm('Are you sure you want to clear everything and start fresh? This will remove all students, rounds, and locked data.')) {
+            // Reset all data
+            this.studentNames = '';
+            this.numRounds = 5;
+            this.numTeams = 2;
+            this.students = [];
+            this.rounds = [];
+            this.errorMessage = '';
+            this.isGenerated = false;
+            this.studentToRemove = '';
+
+            // Clear localStorage
+            this.clearLocalStorage();
+
+            // Clear URL parameter
+            const url = new URL(window.location.href);
+            url.searchParams.delete('state');
+            window.history.replaceState({}, '', url.toString());
+          }
+        },
+
+        regenerateWithLockedRounds() {
+          // Step 1: Reset all student counts to 0
           this.students.forEach(student => {
             student.driverCount = 0;
             student.loaderCount = 0;
           });
 
-          // Clear previous schedule
-          this.rounds = [];
+          // Step 2: Recalculate counts from locked rounds
+          const lockedRounds = this.rounds.filter(r => r.locked);
+          lockedRounds.forEach(round => {
+            round.teams.forEach(team => {
+              // Count driver1
+              const driver1 = this.students.find(s => s.name === team.driver1);
+              if (driver1) driver1.driverCount++;
 
-          // Run algorithm (leverages existing Math.random() for variation)
-          this.runGreedyFillAlgorithm();
+              // Count driver2
+              const driver2 = this.students.find(s => s.name === team.driver2);
+              if (driver2) driver2.driverCount++;
 
-          // Validate final schedule
+              // Count loader
+              const loader = this.students.find(s => s.name === team.loader);
+              if (loader) loader.loaderCount++;
+            });
+          });
+
+          // Step 3: Remove unlocked rounds (we'll regenerate them)
+          const unlockedRoundNumbers = this.rounds
+            .filter(r => !r.locked)
+            .map(r => r.roundNumber);
+
+          this.rounds = this.rounds.filter(r => r.locked);
+
+          // Step 4: Generate new pairings for unlocked rounds
+          unlockedRoundNumbers.forEach(roundNumber => {
+            const round = {
+              roundNumber: roundNumber,
+              teams: [],
+              locked: false
+            };
+
+            // Track students assigned in this round to prevent duplicates
+            const assignedThisRound = new Set();
+
+            // Loop through each team
+            for (let t = 1; t <= this.numTeams; t++) {
+              const team = {
+                teamNumber: t,
+                driver1: '',
+                driver2: '',
+                loader: ''
+              };
+
+              // Assign driver1
+              const driver1 = this.selectStudentForRole('driver', assignedThisRound);
+              team.driver1 = driver1.name;
+              driver1.driverCount++;
+              assignedThisRound.add(driver1.id);
+
+              // Assign driver2
+              const driver2 = this.selectStudentForRole('driver', assignedThisRound);
+              team.driver2 = driver2.name;
+              driver2.driverCount++;
+              assignedThisRound.add(driver2.id);
+
+              // Assign loader
+              const loader = this.selectStudentForRole('loader', assignedThisRound);
+              team.loader = loader.name;
+              loader.loaderCount++;
+              assignedThisRound.add(loader.id);
+
+              round.teams.push(team);
+            }
+
+            this.rounds.push(round);
+          });
+
+          // Step 5: Validate final schedule
           this.validateFinalSchedule();
 
-          // Keep isGenerated = true (schedule remains visible)
+          // Step 6: Save to localStorage
+          this.saveToLocalStorage();
         },
 
         runGreedyFillAlgorithm() {
@@ -244,7 +603,8 @@
           for (let r = 1; r <= this.numRounds; r++) {
             const round = {
               roundNumber: r,
-              teams: []
+              teams: [],
+              locked: false
             };
 
             // Track students assigned in this round to prevent duplicates
